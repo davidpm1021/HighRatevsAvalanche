@@ -188,6 +188,11 @@ export const calculateMinimum = (debts) => {
 export const calculateAvalanche = (debts, extraPayment = 0) => {
   if (!debts.length) return null;
   
+  // If no extra payment, use the minimum payment strategy for consistency
+  if (extraPayment === 0) {
+    return calculateMinimum(debts);
+  }
+  
   // Create a deep copy of debts to avoid mutating the original
   let workingDebts = JSON.parse(JSON.stringify(debts));
   
@@ -305,6 +310,11 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
  */
 export const calculateSnowball = (debts, extraPayment = 0) => {
   if (!debts.length) return null;
+  
+  // If no extra payment, use the minimum payment strategy for consistency
+  if (extraPayment === 0) {
+    return calculateMinimum(debts);
+  }
   
   // Create a deep copy of debts to avoid mutating the original
   let workingDebts = JSON.parse(JSON.stringify(debts));
