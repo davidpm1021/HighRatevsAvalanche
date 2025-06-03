@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 
 export default function PlanDetails() {
   const { state, dispatch } = useApp();
-  const { selectedStrategy, results, extraMonthlyPayment } = state;
+  const { selectedStrategy, results } = state;
   const [displayCount, setDisplayCount] = useState(24);
   const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(false);
   
@@ -160,46 +160,6 @@ export default function PlanDetails() {
   };
   
   const debtMilestones = getDebtEliminationOrder();
-
-  // Calculate payment breakdown for tooltip
-  const getPaymentBreakdown = (payment, monthIndex) => {
-    if (!payment || payment.payment === 0) return null;
-    
-    const minPayment = payment.minimumPayment || 0;
-    const extraPayment = payment.extraPayment || 0;
-    
-    if (extraPayment === 0) {
-      // Just minimum payment
-      return `${formatCurrency(minPayment)} minimum`;
-    }
-    
-    // For the breakdown, we need to figure out how much of the extra comes from:
-    // 1. User's extra payment amount
-    // 2. Freed minimums from paid-off debts
-    
-    let parts = [`${formatCurrency(minPayment)} minimum`];
-    
-    // If this payment has extra, break it down
-    if (extraPayment > 0) {
-      const userExtra = extraMonthlyPayment || 0;
-      
-      if (extraPayment <= userExtra) {
-        // All extra comes from user's extra payment
-        parts.push(`${formatCurrency(extraPayment)} extra`);
-      } else {
-        // Some comes from user extra, some from freed minimums
-        if (userExtra > 0) {
-          parts.push(`${formatCurrency(userExtra)} extra`);
-        }
-        const freedAmount = extraPayment - userExtra;
-        if (freedAmount > 0) {
-          parts.push(`${formatCurrency(freedAmount)} (freed minimums)`);
-        }
-      }
-    }
-    
-    return `${parts.join(' + ')} = ${formatCurrency(payment.payment)} total`;
-  };
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -402,20 +362,7 @@ export default function PlanDetails() {
                                   )}
                                 </td>
                                 <td className={`px-6 py-4 text-sm text-center ${isExtraPayment ? 'bg-green-50 text-green-700 font-semibold' : paymentAmount === 0 ? 'text-gray-400' : 'text-gray-900'}`}>
-                                  {paymentAmount > 0 ? (
-                                    <div 
-                                      className="relative group cursor-help"
-                                      title={getPaymentBreakdown(payment, monthIndex) || ''}
-                                    >
-                                      {formatCurrency(paymentAmount)}
-                                      {getPaymentBreakdown(payment, monthIndex) && (
-                                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                                          {getPaymentBreakdown(payment, monthIndex)}
-                                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : '—'}
+                                  {paymentAmount > 0 ? formatCurrency(paymentAmount) : '—'}
                                 </td>
                               </React.Fragment>
                             );
@@ -486,20 +433,7 @@ export default function PlanDetails() {
                                 <div className="flex justify-between">
                                   <span className="text-sm text-gray-600">Payment:</span>
                                   <span className={`text-sm font-medium ${isExtraPayment ? 'text-green-600' : paymentAmount === 0 ? 'text-gray-400' : 'text-gray-900'}`}>
-                                    {paymentAmount > 0 ? (
-                                      <div 
-                                        className="relative group cursor-help"
-                                        title={getPaymentBreakdown(payment, monthIndex) || ''}
-                                      >
-                                        {formatCurrency(paymentAmount)}
-                                        {getPaymentBreakdown(payment, monthIndex) && (
-                                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                                            {getPaymentBreakdown(payment, monthIndex)}
-                                            <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : '—'}
+                                    {paymentAmount > 0 ? formatCurrency(paymentAmount) : '—'}
                                   </span>
                                 </div>
                               </div>
