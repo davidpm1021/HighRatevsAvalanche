@@ -115,43 +115,51 @@ export default function PlanDetails() {
       });
     }
     
-    let cumulativeMonth = 0;
+    let previousPayoffMonth = 0;
     let remainingDebts = [...state.debts];
     
     sortedDebts.forEach(debt => {
       const payoffMonth = debtPaidOffMonths[debt.id];
       if (payoffMonth) {
-        // Find representative payment during active period
-        let representativePayment = 0;
-        let totalMonthlyPayment = 0;
+        // Find a representative month where this debt is actively being paid
+        let representativeMonth = null;
+        let maxPayment = 0;
         
-        for (let i = Math.max(cumulativeMonth, 0); i < payoffMonth - 1; i++) {
+        // Look for the month with the highest payment to this debt (likely when extra payment is applied)
+        for (let i = Math.max(previousPayoffMonth, 0); i < payoffMonth; i++) {
           const month = monthlyPayments[i];
           const payment = month.debtPayments.find(p => p.debtId === debt.id);
-          if (payment && payment.extraPayment > 0) {
-            representativePayment = payment.payment;
-            totalMonthlyPayment = month.debtPayments.reduce((sum, p) => sum + p.payment, 0);
-            break;
+          if (payment && payment.payment > maxPayment) {
+            maxPayment = payment.payment;
+            representativeMonth = month;
           }
         }
         
-        if (representativePayment === 0) {
-          const monthData = monthlyPayments[payoffMonth - 1];
-          const debtPayment = monthData.debtPayments.find(p => p.debtId === debt.id);
-          representativePayment = debtPayment.payment;
-          totalMonthlyPayment = monthData.debtPayments.reduce((sum, p) => sum + p.payment, 0);
+        // If no representative month found, use the final payment month
+        if (!representativeMonth) {
+          representativeMonth = monthlyPayments[payoffMonth - 1];
         }
+        
+        // Get the debt payment info from representative month
+        const debtPaymentInfo = representativeMonth.debtPayments.find(p => p.debtId === debt.id);
+        const totalMonthlyBudget = representativeMonth.debtPayments.reduce((sum, p) => sum + p.payment, 0);
+        
+        // For minimum payment strategy, each debt has its own timeline
+        // For avalanche/snowball, it's sequential
+        const monthsToPayOff = selectedStrategy === 'minimum' 
+          ? payoffMonth 
+          : payoffMonth - previousPayoffMonth;
         
         milestones.push({
           debt,
           payoffMonth,
-          monthsToPayOff: payoffMonth - cumulativeMonth,
-          totalPayment: totalMonthlyPayment,
-          debtPayment: representativePayment,
+          monthsToPayOff,
+          totalPayment: totalMonthlyBudget,
+          debtPayment: debtPaymentInfo ? debtPaymentInfo.payment : 0,
           remainingDebts: remainingDebts.filter(d => d.id !== debt.id)
         });
         
-        cumulativeMonth = payoffMonth;
+        previousPayoffMonth = payoffMonth;
         remainingDebts = remainingDebts.filter(d => d.id !== debt.id);
       }
     });
