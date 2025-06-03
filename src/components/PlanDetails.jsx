@@ -81,93 +81,50 @@ export default function PlanDetails() {
     time: minimumResult.months - months
   } : { interest: 0, time: 0 };
 
-  // Calculate debt elimination milestones with improved logic
-  const getDebtEliminationOrder = () => {
-    const milestones = [];
-    const debtPaidOffMonths = {};
+  // Calculate simple debt priority and payoff order
+  const getDebtPriorityList = () => {
+    const debtPayoffData = [];
     
     // Find when each debt gets paid off
     state.debts.forEach(debt => {
+      let payoffMonth = null;
       for (let i = 0; i < monthlyPayments.length; i++) {
         const month = monthlyPayments[i];
         const payment = month.debtPayments.find(p => p.debtId === debt.id);
         if (payment && payment.balance === 0 && payment.payment > 0) {
-          debtPaidOffMonths[debt.id] = i + 1;
+          payoffMonth = i + 1;
           break;
         }
       }
+      
+      debtPayoffData.push({
+        ...debt,
+        payoffMonth: payoffMonth || months // Use total months if not found
+      });
     });
     
-    // Sort debts by strategy order (not just payoff time)
+    // Sort debts by strategy order
     let sortedDebts;
+    let sortingDescription;
+    
     if (selectedStrategy === 'avalanche') {
-      // Avalanche: highest APR first
-      sortedDebts = [...state.debts].sort((a, b) => b.apr - a.apr);
+      sortedDebts = [...debtPayoffData].sort((a, b) => b.apr - a.apr);
+      sortingDescription = 'Ordered by highest interest rate first';
     } else if (selectedStrategy === 'snowball') {
-      // Snowball: smallest balance first
-      sortedDebts = [...state.debts].sort((a, b) => a.balance - b.balance);
+      sortedDebts = [...debtPayoffData].sort((a, b) => a.balance - b.balance);
+      sortingDescription = 'Ordered by lowest balance first';
     } else {
-      // Minimum payments: sort by actual payoff time
-      sortedDebts = [...state.debts].sort((a, b) => {
-        const aMonth = debtPaidOffMonths[a.id] || Infinity;
-        const bMonth = debtPaidOffMonths[b.id] || Infinity;
-        return aMonth - bMonth;
-      });
+      sortedDebts = [...debtPayoffData].sort((a, b) => a.payoffMonth - b.payoffMonth);
+      sortingDescription = 'Ordered by natural payoff timeline';
     }
     
-    let previousPayoffMonth = 0;
-    let remainingDebts = [...state.debts];
-    
-    sortedDebts.forEach(debt => {
-      const payoffMonth = debtPaidOffMonths[debt.id];
-      if (payoffMonth) {
-        // Find a representative month where this debt is actively being paid
-        let representativeMonth = null;
-        let maxPayment = 0;
-        
-        // Look for the month with the highest payment to this debt (likely when extra payment is applied)
-        for (let i = Math.max(previousPayoffMonth, 0); i < payoffMonth; i++) {
-          const month = monthlyPayments[i];
-          const payment = month.debtPayments.find(p => p.debtId === debt.id);
-          if (payment && payment.payment > maxPayment) {
-            maxPayment = payment.payment;
-            representativeMonth = month;
-          }
-        }
-        
-        // If no representative month found, use the final payment month
-        if (!representativeMonth) {
-          representativeMonth = monthlyPayments[payoffMonth - 1];
-        }
-        
-        // Get the debt payment info from representative month
-        const debtPaymentInfo = representativeMonth.debtPayments.find(p => p.debtId === debt.id);
-        const totalMonthlyBudget = representativeMonth.debtPayments.reduce((sum, p) => sum + p.payment, 0);
-        
-        // For minimum payment strategy, each debt has its own timeline
-        // For avalanche/snowball, it's sequential
-        const monthsToPayOff = selectedStrategy === 'minimum' 
-          ? payoffMonth 
-          : payoffMonth - previousPayoffMonth;
-        
-        milestones.push({
-          debt,
-          payoffMonth,
-          monthsToPayOff,
-          totalPayment: totalMonthlyBudget,
-          debtPayment: debtPaymentInfo ? debtPaymentInfo.payment : 0,
-          remainingDebts: remainingDebts.filter(d => d.id !== debt.id)
-        });
-        
-        previousPayoffMonth = payoffMonth;
-        remainingDebts = remainingDebts.filter(d => d.id !== debt.id);
-      }
-    });
-    
-    return milestones;
+    return {
+      debts: sortedDebts,
+      sortingDescription
+    };
   };
   
-  const debtMilestones = getDebtEliminationOrder();
+  const { debts: prioritizedDebts, sortingDescription } = getDebtPriorityList();
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -220,103 +177,81 @@ export default function PlanDetails() {
         </div>
       )}
       
-      {/* Payoff Timeline */}
+      {/* Debt Priority List */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl shadow-lg border border-blue-200 p-8 mb-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Payoff Timeline</h2>
-            <p className="text-gray-600">Your step-by-step debt elimination plan</p>
-          </div>
-          <button
-            onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)}
-            className="flex items-center space-x-2 bg-white hover:bg-gray-50 text-blue-600 hover:text-blue-700 transition-colors font-medium py-3 px-6 rounded-lg border border-blue-200 shadow-sm"
-          >
-            <span>{showDetailedBreakdown ? 'Hide' : 'Show'} Month Details</span>
-            <svg 
-              className={`h-5 w-5 transition-transform ${showDetailedBreakdown ? 'rotate-180' : ''}`} 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Debt Priority Order</h2>
+          <p className="text-gray-600">{sortingDescription}</p>
         </div>
         
-        {/* Debt Milestones */}
-        <div className="space-y-6">
-          {debtMilestones.map((milestone, index) => (
-            <div 
-              key={milestone.debt.id} 
-              className="bg-white rounded-xl border border-gray-200 shadow-md hover:shadow-lg transition-shadow p-6"
-            >
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex-1">
-                  <div className="flex items-center mb-2">
-                    <span className="inline-flex items-center justify-center w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-sm font-bold mr-4 shadow-md">
-                      {index + 1}
-                    </span>
-                    <h3 className="text-xl font-semibold text-gray-900">{milestone.debt.name}</h3>
-                  </div>
-                  <div className="text-gray-600 flex items-center space-x-4 ml-14">
-                    <span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium">{milestone.debt.apr.toFixed(2)}% APR</span>
-                    <span>•</span>
-                    <span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium">{formatCurrency(milestone.debt.balance)} balance</span>
+        <div className="bg-white rounded-lg p-6">
+          <div className="space-y-4">
+            {prioritizedDebts.map((debt, index) => (
+              <div 
+                key={debt.id} 
+                className="flex items-center justify-between py-4 px-6 bg-soft-blue-tint border border-light-gray-blue rounded-lg"
+              >
+                <div className="flex items-center space-x-4">
+                  <span className="inline-flex items-center justify-center w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-sm font-bold">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-navy-blue">{debt.name}</h3>
+                    <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <span>{debt.apr.toFixed(2)}% APR</span>
+                      <span>•</span>
+                      <span>{formatCurrency(debt.balance)} balance</span>
+                      {debt.isCreditCard && (
+                        <>
+                          <span>•</span>
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-bright-blue text-white">
+                            Credit Card
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="text-right bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div className="text-sm text-green-600 font-medium">Paid off in</div>
-                  <div className="text-2xl font-bold text-green-700">Month {milestone.payoffMonth}</div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-600">Paid off in</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    Month {debt.payoffMonth}
+                  </div>
                 </div>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center bg-soft-blue-tint border border-light-gray-blue rounded-lg p-4">
-                  <div className="text-sm text-navy-blue font-medium mb-1">Monthly Payment</div>
-                  <div className="text-xl font-bold text-navy-blue">{formatCurrency(milestone.debtPayment)}</div>
-                </div>
-                <div className="text-center bg-soft-blue-tint border border-light-gray-blue rounded-lg p-4">
-                  <div className="text-sm text-navy-blue font-medium mb-1">Total Budget</div>
-                  <div className="text-xl font-bold text-navy-blue">{formatCurrency(milestone.totalPayment)}</div>
-                </div>
-                <div className="text-center bg-soft-blue-tint border border-light-gray-blue rounded-lg p-4">
-                  <div className="text-sm text-navy-blue font-medium mb-1">Time to Pay Off</div>
-                  <div className="text-xl font-bold text-navy-blue">{milestone.monthsToPayOff} months</div>
-                </div>
+            ))}
+          </div>
+          
+          {prioritizedDebts.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl p-4 mb-4">
+                <div className="text-lg font-bold">🎉 All debts paid off in {months} months! 🎉</div>
               </div>
-              
-              {milestone.remainingDebts.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <div className="text-sm text-gray-600 mb-3 font-medium">Remaining debts after payoff:</div>
-                  <div className="flex flex-wrap gap-2">
-                    {milestone.remainingDebts.map(debt => (
-                      <span 
-                        key={debt.id} 
-                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 border border-gray-300"
-                      >
-                        {debt.name} ({formatCurrency(debt.balance)})
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {index === debtMilestones.length - 1 && (
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <div className="text-center bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl p-6 shadow-lg">
-                    <div className="text-xl font-bold">🎉 All debts paid off! You're debt-free! 🎉</div>
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={() => setShowDetailedBreakdown(!showDetailedBreakdown)}
+                className="flex items-center space-x-2 bg-white hover:bg-gray-50 text-blue-600 hover:text-blue-700 transition-colors font-medium py-3 px-6 rounded-lg border border-blue-200 shadow-sm mx-auto"
+              >
+                <span>{showDetailedBreakdown ? 'Hide' : 'Show'} Month-by-Month Details</span>
+                <svg 
+                  className={`h-5 w-5 transition-transform ${showDetailedBreakdown ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
             </div>
-          ))}
+          )}
         </div>
         
         {/* Detailed Month-by-Month Breakdown */}
         {showDetailedBreakdown && (
           <div className="mt-8 pt-8 border-t border-gray-200">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Month-by-Month Details</h3>
-        
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">Month-by-Month Details</h3>
+            </div>
+            
             {/* Responsive Table/Card View */}
             {state.debts.length <= 3 ? (
               // TABLE VIEW (for 3 or fewer debts)
