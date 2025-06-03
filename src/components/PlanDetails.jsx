@@ -85,21 +85,51 @@ export default function PlanDetails() {
   const getDebtPriorityList = () => {
     const debtPayoffData = [];
     
-    // Find when each debt gets paid off
+    // Find when each debt gets paid off and analyze how it was paid off
     state.debts.forEach(debt => {
       let payoffMonth = null;
+      let wasTargeted = false;
+      
+      // Look through all months to find when this debt's balance first hits zero
       for (let i = 0; i < monthlyPayments.length; i++) {
         const month = monthlyPayments[i];
         const payment = month.debtPayments.find(p => p.debtId === debt.id);
-        if (payment && payment.balance === 0 && payment.payment > 0) {
-          payoffMonth = i + 1;
-          break;
+        
+        if (payment) {
+          // Check if balance is zero or very close to zero (accounting for floating point precision)
+          if (payment.balance <= 0.01) {
+            // Only set payoffMonth if we haven't found it yet (first time balance hits zero)
+            if (payoffMonth === null) {
+              payoffMonth = i + 1;
+              
+              // Check if this debt received extra payment in its final month or leading months
+              wasTargeted = payment.extraPayment > 0 || 
+                monthlyPayments.slice(Math.max(0, i-3), i).some(prevMonth => {
+                  const prevPayment = prevMonth.debtPayments.find(p => p.debtId === debt.id);
+                  return prevPayment && prevPayment.extraPayment > 0;
+                });
+            }
+            break; // Stop looking once we find the payoff month
+          }
+        }
+      }
+      
+      // If we still haven't found a payoff month, this debt never gets fully paid off in our timeline
+      if (payoffMonth === null) {
+        // Check the final balance to see if it's essentially paid off
+        const finalMonth = monthlyPayments[monthlyPayments.length - 1];
+        const finalPayment = finalMonth?.debtPayments.find(p => p.debtId === debt.id);
+        if (finalPayment && finalPayment.balance <= 0.01) {
+          payoffMonth = monthlyPayments.length;
+        } else {
+          payoffMonth = months; // Use total months as fallback
         }
       }
       
       debtPayoffData.push({
         ...debt,
-        payoffMonth: payoffMonth || months // Use total months if not found
+        payoffMonth,
+        wasTargeted
       });
     });
     
@@ -145,37 +175,6 @@ export default function PlanDetails() {
       <div className={`${bgColor} rounded-lg py-8 px-8 text-center mb-8`}>
         <h1 className="text-3xl font-bold mb-2 text-white">{title}</h1>
       </div>
-        
-      {/* Key Metrics */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="text-center">
-            <div className="text-4xl font-bold text-gray-900 mb-2">{months}</div>
-            <div className="text-lg text-gray-600">months to payoff</div>
-          </div>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-gray-900 mb-2">{formatCurrency(totalPaid)}</div>
-            <div className="text-lg text-gray-600">total cost</div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Savings Summary */}
-      {minimumResult && minimumResult !== strategyData && savings.interest > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Savings vs Minimum Payments</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(savings.interest)}</div>
-              <div className="text-gray-600">interest saved</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{savings.time} months</div>
-              <div className="text-gray-600">time saved</div>
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* Debt Priority List */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl shadow-lg border border-blue-200 p-8 mb-8">
@@ -186,40 +185,59 @@ export default function PlanDetails() {
         
         <div className="bg-white rounded-lg p-6">
           <div className="space-y-4">
-            {prioritizedDebts.map((debt, index) => (
-              <div 
-                key={debt.id} 
-                className="flex items-center justify-between py-4 px-6 bg-soft-blue-tint border border-light-gray-blue rounded-lg"
-              >
-                <div className="flex items-center space-x-4">
-                  <span className="inline-flex items-center justify-center w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-sm font-bold">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <h3 className="text-lg font-semibold text-navy-blue">{debt.name}</h3>
-                    <div className="flex items-center space-x-4 text-sm text-gray-600">
-                      <span>{debt.apr.toFixed(2)}% APR</span>
-                      <span>•</span>
-                      <span>{formatCurrency(debt.balance)} balance</span>
-                      {debt.isCreditCard && (
-                        <>
-                          <span>•</span>
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-bright-blue text-white">
-                            Credit Card
+            {prioritizedDebts.map((debt, index) => {
+              // Check if this debt paid off naturally (early) compared to its priority position
+              const actualPayoffOrder = prioritizedDebts
+                .filter(d => d.payoffMonth <= debt.payoffMonth)
+                .sort((a, b) => a.payoffMonth - b.payoffMonth)
+                .findIndex(d => d.id === debt.id) + 1;
+              const paidOffEarly = actualPayoffOrder < index + 1 && selectedStrategy !== 'minimum';
+              
+              return (
+                <div 
+                  key={debt.id} 
+                  className="flex items-center justify-between py-4 px-6 bg-soft-blue-tint border border-light-gray-blue rounded-lg"
+                >
+                  <div className="flex items-center space-x-4">
+                    <span className="inline-flex items-center justify-center w-8 h-8 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-sm font-bold">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-lg font-semibold text-navy-blue">{debt.name}</h3>
+                        {paidOffEarly && (
+                          <span 
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"
+                            title="Even though this wasn't prioritized, it was paid off naturally through minimum payments"
+                          >
+                            Natural Payoff
                           </span>
-                        </>
-                      )}
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm text-gray-600">
+                        <span>{debt.apr.toFixed(2)}% APR</span>
+                        <span>•</span>
+                        <span>{formatCurrency(debt.balance)} balance</span>
+                        {debt.isCreditCard && (
+                          <>
+                            <span>•</span>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-bright-blue text-white">
+                              Credit Card
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Paid off in</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      Month {debt.payoffMonth}
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-gray-600">Paid off in</div>
-                  <div className="text-2xl font-bold text-green-600">
-                    Month {debt.payoffMonth}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           
           {prioritizedDebts.length > 0 && (
@@ -431,6 +449,37 @@ export default function PlanDetails() {
           </div>
         )}
       </div>
+        
+      {/* Key Metrics */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="text-center">
+            <div className="text-4xl font-bold text-gray-900 mb-2">{months}</div>
+            <div className="text-lg text-gray-600">months to payoff</div>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl font-bold text-gray-900 mb-2">{formatCurrency(totalPaid)}</div>
+            <div className="text-lg text-gray-600">total cost</div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Savings Summary */}
+      {minimumResult && minimumResult !== strategyData && savings.interest > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Savings vs Minimum Payments</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{formatCurrency(savings.interest)}</div>
+              <div className="text-gray-600">interest saved</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">{savings.time} months</div>
+              <div className="text-gray-600">time saved</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
