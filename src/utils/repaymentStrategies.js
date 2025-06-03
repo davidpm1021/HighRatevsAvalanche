@@ -213,7 +213,7 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
     months++;
     let monthPaymentBreakdown = [];
     
-    // Calculate total minimums from paid-off debts that should be redistributed
+    // Calculate total minimums from PREVIOUSLY paid-off debts that should be redistributed
     const paidOffMinimums = workingDebts
       .filter(debt => debt.balance <= 0)
       .reduce((sum, debt) => sum + debt.originalMinPayment, 0);
@@ -242,44 +242,27 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
         continue;
       }
       
-      // Determine payment amount for this debt
-      let paymentAmount = 0;
+      // Determine extra payment amount for this debt
+      let extraForThisDebt = 0;
       
       if (debt === priorityDebt) {
-        // Priority debt gets: its minimum + extra payment + minimums from paid-off debts
-        paymentAmount = debt.originalMinPayment + extraPayment + paidOffMinimums;
-      } else {
-        // Other debts get just their minimum payment
-        paymentAmount = debt.originalMinPayment;
+        // Priority debt gets: extra payment + minimums from ALREADY paid-off debts
+        extraForThisDebt = extraPayment + paidOffMinimums;
       }
+      // Other debts get no extra payment
       
       // Apply the payment using our existing logic
-      const paymentInfo = processDebtPayment(debt, Math.max(0, paymentAmount - debt.originalMinPayment), totals);
-      
-      // Override the payment amount to reflect our intended payment
-      const actualPayment = Math.min(paymentAmount, debt.balance + paymentInfo.interestCharged);
-      const extraApplied = Math.max(0, actualPayment - paymentInfo.minimumPayment);
+      const paymentInfo = processDebtPayment(debt, extraForThisDebt, totals);
       
       monthPaymentBreakdown.push({
         debtId: debt.id,
-        payment: actualPayment,
+        payment: paymentInfo.payment,
         minimumPayment: paymentInfo.minimumPayment,
-        extraPayment: extraApplied,
+        extraPayment: paymentInfo.extraPayment,
         balance: paymentInfo.balance,
         interestCharged: paymentInfo.interestCharged,
         originalMinPayment: debt.originalMinPayment
       });
-      
-      // Adjust totals if our payment differs from processDebtPayment calculation
-      const paymentDifference = actualPayment - paymentInfo.payment;
-      if (paymentDifference !== 0) {
-        totals.totalPaid += paymentDifference;
-        debt.balance -= paymentDifference;
-        if (debt.balance < 0.01) {
-          debt.balance = 0;
-          monthPaymentBreakdown[i].balance = 0;
-        }
-      }
     }
     
     monthlyPayments.push({
@@ -334,7 +317,7 @@ export const calculateSnowball = (debts, extraPayment = 0) => {
     months++;
     let monthPaymentBreakdown = [];
     
-    // Calculate total minimums from paid-off debts that should be redistributed
+    // Calculate total minimums from PREVIOUSLY paid-off debts that should be redistributed
     const paidOffMinimums = workingDebts
       .filter(debt => debt.balance <= 0)
       .reduce((sum, debt) => sum + debt.originalMinPayment, 0);
@@ -366,44 +349,27 @@ export const calculateSnowball = (debts, extraPayment = 0) => {
         continue;
       }
       
-      // Determine payment amount for this debt
-      let paymentAmount = 0;
+      // Determine extra payment amount for this debt
+      let extraForThisDebt = 0;
       
       if (debt === priorityDebt) {
-        // Priority debt gets: its minimum + extra payment + minimums from paid-off debts
-        paymentAmount = debt.originalMinPayment + extraPayment + paidOffMinimums;
-      } else {
-        // Other debts get just their minimum payment
-        paymentAmount = debt.originalMinPayment;
+        // Priority debt gets: extra payment + minimums from ALREADY paid-off debts
+        extraForThisDebt = extraPayment + paidOffMinimums;
       }
+      // Other debts get no extra payment
       
       // Apply the payment using our existing logic
-      const paymentInfo = processDebtPayment(debt, Math.max(0, paymentAmount - debt.originalMinPayment), totals);
-      
-      // Override the payment amount to reflect our intended payment
-      const actualPayment = Math.min(paymentAmount, debt.balance + paymentInfo.interestCharged);
-      const extraApplied = Math.max(0, actualPayment - paymentInfo.minimumPayment);
+      const paymentInfo = processDebtPayment(debt, extraForThisDebt, totals);
       
       monthPaymentBreakdown.push({
         debtId: debt.id,
-        payment: actualPayment,
+        payment: paymentInfo.payment,
         minimumPayment: paymentInfo.minimumPayment,
-        extraPayment: extraApplied,
+        extraPayment: paymentInfo.extraPayment,
         balance: paymentInfo.balance,
         interestCharged: paymentInfo.interestCharged,
         originalMinPayment: debt.originalMinPayment
       });
-      
-      // Adjust totals if our payment differs from processDebtPayment calculation
-      const paymentDifference = actualPayment - paymentInfo.payment;
-      if (paymentDifference !== 0) {
-        totals.totalPaid += paymentDifference;
-        debt.balance -= paymentDifference;
-        if (debt.balance < 0.01) {
-          debt.balance = 0;
-          monthPaymentBreakdown[i].balance = 0;
-        }
-      }
     }
     
     monthlyPayments.push({
