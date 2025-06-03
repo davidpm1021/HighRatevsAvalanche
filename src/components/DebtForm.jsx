@@ -118,6 +118,25 @@ export default function DebtForm() {
             </div>
 
             <div className="form-group">
+              <label htmlFor="balance" className="form-label">
+                Current Balance ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                id="balance"
+                placeholder="0"
+                {...register('balance', { 
+                  required: 'Balance is required',
+                  min: { value: 0, message: 'Balance must be positive' }
+                })}
+              />
+              {errors.balance && (
+                <p className="mt-2 text-sm" style={{ color: '#f44336' }}>{errors.balance.message}</p>
+              )}
+            </div>
+
+            <div className="form-group">
               <label htmlFor="apr" className="form-label">
                 Annual Interest Rate (%)
               </label>
@@ -137,61 +156,42 @@ export default function DebtForm() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="balance" className="form-label">
-                Current Balance ($)
+              <label htmlFor="minPayment" className="form-label">
+                Minimum Monthly Payment ($)
               </label>
-              <input
-                type="number"
-                step="0.01"
-                id="balance"
-                placeholder="0"
-                {...register('balance', { 
-                  required: 'Balance is required',
-                  min: { value: 0, message: 'Balance must be positive' }
-                })}
-              />
-              {errors.balance && (
-                <p className="mt-2 text-sm" style={{ color: '#f44336' }}>{errors.balance.message}</p>
+              {!isCreditCard ? (
+                <>
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="minPayment"
+                    placeholder="0"
+                    {...register('minPayment', { 
+                      required: 'Minimum payment is required',
+                      min: { value: 0, message: 'Payment must be positive' }
+                    })}
+                  />
+                  {errors.minPayment && (
+                    <p className="mt-2 text-sm" style={{ color: '#f44336' }}>{errors.minPayment.message}</p>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-md p-4" style={{ border: '1px solid #e0e0e0', backgroundColor: '#bbdefb', color: '#333' }}>
+                  <div className="flex items-center mb-2">
+                    <svg className="h-4 w-4 mr-2" style={{ color: '#1976d2' }} fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-sm font-medium" style={{ color: '#1976d2' }}>Automatically calculated</p>
+                  </div>
+                  <p className="text-xs mb-2">For credit cards, minimum payment is:</p>
+                  <ul className="list-disc list-inside text-xs mb-2 ml-4">
+                    <li>1% of balance + monthly interest</li>
+                    <li>Or $25 minimum (if balance allows)</li>
+                  </ul>
+                  <p className="text-xs italic">Calculated using standard industry practices</p>
+                </div>
               )}
             </div>
-
-            {!isCreditCard && (
-              <div className="form-group">
-                <label htmlFor="minPayment" className="form-label">
-                  Minimum Monthly Payment ($)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  id="minPayment"
-                  placeholder="0"
-                  {...register('minPayment', { 
-                    required: 'Minimum payment is required',
-                    min: { value: 0, message: 'Payment must be positive' }
-                  })}
-                />
-                {errors.minPayment && (
-                  <p className="mt-2 text-sm" style={{ color: '#f44336' }}>{errors.minPayment.message}</p>
-                )}
-              </div>
-            )}
-            
-            {isCreditCard && (
-              <div className="form-group">
-                <label className="form-label">
-                  Minimum Payment
-                </label>
-                <div className="rounded-md p-4" style={{ border: '1px solid #e0e0e0', backgroundColor: '#bbdefb', color: '#333' }}>
-                  <p className="font-medium mb-2" style={{ color: '#1976d2' }}>Automatically calculated</p>
-                  <p className="text-sm mb-2">For credit cards, the minimum payment is calculated as:</p>
-                  <ul className="list-disc list-inside text-sm mb-2">
-                    <li>1% of your current balance <strong>plus</strong> monthly interest</li>
-                    <li>Or $25, whichever is higher (unless balance is lower)</li>
-                  </ul>
-                  <p className="text-xs italic">You don't need to enter this — we'll calculate it for you!</p>
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="flex space-x-4">

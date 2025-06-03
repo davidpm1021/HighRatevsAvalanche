@@ -77,45 +77,26 @@ export default function PaymentSetup() {
       <div className="extra-payments-section">
         <h3 className="extra-payments-title">Extra Payments</h3>
         
-        <div className="space-y-6">
-          <div className="form-group">
-            <label htmlFor="extraPayment" className="form-label">
-              Monthly Extra Payment ($):
-            </label>
-            <input
-              type="number"
-              id="extraPayment"
-              placeholder="0"
-              min="0"
-              step="0.01"
-              {...register('extraPayment', { 
-                min: { value: 0, message: 'Extra payment must be positive' }
-              })}
-            />
-            {errors.extraPayment && (
-              <p className="mt-2 text-sm" style={{ color: '#f44336' }}>{errors.extraPayment.message}</p>
-            )}
-            <p className="mt-2 text-sm" style={{ color: '#666' }}>
-              Even an extra $50 per month can make a significant difference in your total interest paid.
-            </p>
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="oneTimePayment" className="form-label">
-              One-Time Extra Payment ($):
-            </label>
-            <input
-              type="number"
-              id="oneTimePayment"
-              placeholder="0"
-              min="0"
-              step="0.01"
-              disabled
-            />
-            <p className="mt-2 text-sm" style={{ color: '#666' }}>
-              One-time payment feature coming soon.
-            </p>
-          </div>
+        <div className="form-group">
+          <label htmlFor="extraPayment" className="form-label">
+            Monthly Extra Payment ($):
+          </label>
+          <input
+            type="number"
+            id="extraPayment"
+            placeholder="0"
+            min="0"
+            step="0.01"
+            {...register('extraPayment', { 
+              min: { value: 0, message: 'Extra payment must be positive' }
+            })}
+          />
+          {errors.extraPayment && (
+            <p className="mt-2 text-sm" style={{ color: '#f44336' }}>{errors.extraPayment.message}</p>
+          )}
+          <p className="mt-2 text-sm" style={{ color: '#666' }}>
+            Even an extra $50 per month can make a significant difference in your total interest paid.
+          </p>
         </div>
       </div>
     </div>

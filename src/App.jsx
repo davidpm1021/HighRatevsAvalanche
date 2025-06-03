@@ -7,7 +7,6 @@ import PaymentSetup from './components/PaymentSetup';
 import StrategyCards from './components/StrategyCards';
 import PlanDetails from './components/PlanDetails';
 import Navigation from './components/Navigation';
-import Instructions from './components/Instructions';
 
 function AppContent() {
   const { state } = useApp();
@@ -82,7 +81,6 @@ function AppContent() {
           <Navigation />
         </div>
       </main>
-      <Instructions />
     </div>
   );
 }

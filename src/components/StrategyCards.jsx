@@ -1,6 +1,45 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { calculateMinimum, calculateAvalanche, calculateSnowball } from '../utils/repaymentStrategies';
+
+// Collapsible Info Box Component
+const CollapsibleInfo = ({ title, icon, children, defaultExpanded = false }) => {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  
+  return (
+    <div className="border border-light-gray-blue rounded-md overflow-hidden">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-bright-blue focus:ring-inset text-left"
+        aria-expanded={isExpanded}
+        aria-controls={`info-${title.replace(/\s+/g, '-').toLowerCase()}`}
+      >
+        <div className="flex items-center space-x-2">
+          {icon && <span className="text-base" aria-hidden="true">{icon}</span>}
+          <span className="text-sm font-bold text-navy-blue uppercase tracking-wide">{title}</span>
+        </div>
+        <svg 
+          className={`h-4 w-4 text-navy-blue transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      
+      {isExpanded && (
+        <div 
+          id={`info-${title.replace(/\s+/g, '-').toLowerCase()}`}
+          className="p-4 bg-white border-t border-light-gray-blue"
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function StrategyCards() {
   const { state, dispatch } = useApp();
@@ -24,35 +63,72 @@ export default function StrategyCards() {
     dispatch({ type: 'SET_STRATEGY', payload: strategy });
     // Navigate to detailed plan immediately
     dispatch({ type: 'SET_STEP', payload: 4 });
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const strategies = [
     {
       id: 'minimum',
-      title: 'Minimum Payments Only',
+      title: 'Minimum Payments',
       subtitle: 'If you make just the minimum payment, then you would pay...',
       results: state.results?.minimum,
       bgColor: 'bg-orange',
       buttonColor: 'bg-orange',
-      description: 'Make minimum payments on all debts with no roll over payments until all are paid.'
+      description: 'Make the required minimum payment on each debt.',
+      howItWorks: 'You make the required minimum payment on each debt with no extra payments',
+      pros: [
+        'Keep more cash in your pocket each month',
+        'Provides short-term financial flexibility'
+      ],
+      cons: [
+        'Slowest and most expensive way to pay off debt',
+        'Interest piles up over time',
+        'You could stay in debt for decades'
+      ],
+      bestFor: 'Those with very tight budgets who need maximum monthly flexibility'
     },
     {
       id: 'avalanche',
-      title: 'Avalanche Method',
+      title: 'Debt Avalanche',
       subtitle: 'If you pay off the highest interest rate debt first, then you would pay...',
       results: state.results?.avalanche,
       bgColor: 'bg-bright-green',
       buttonColor: 'bg-bright-green',
-      description: 'Pay extra on the highest interest rate debt while making minimum payments on all others.'
+      description: 'Pay the minimum on all debts, then send extra money to the highest interest rate debt first.',
+      howItWorks: 'You pay the minimum on all debts and send any extra money to the debt with the highest interest rate first',
+      pros: [
+        'Saves you the most money over time',
+        'Cuts down on total interest paid',
+        'Mathematically optimal strategy'
+      ],
+      cons: [
+        'Progress can feel slow at first',
+        'Your biggest debts might not budge right away',
+        'Requires discipline to stick with it'
+      ],
+      bestFor: 'Disciplined savers who want to minimize total interest costs'
     },
     {
       id: 'snowball',
-      title: 'Snowball Method',
+      title: 'Debt Snowball',
       subtitle: 'If you pay off smallest balances first, then you would pay...',
       results: state.results?.snowball,
       bgColor: 'bg-bright-blue',
       buttonColor: 'bg-bright-blue',
-      description: 'Pay extra on the smallest balance debt while making minimum payments on all others.'
+      description: 'Pay the minimum on all debts, then send extra money to the smallest balance first.',
+      howItWorks: 'You pay the minimum on all debts and send any extra money to the debt with the smallest balance first',
+      pros: [
+        'Gives you quick wins and early victories',
+        'Helps build motivation and momentum',
+        'Easier to stay committed long-term'
+      ],
+      cons: [
+        'You might pay a bit more in total interest',
+        'Not the most mathematically efficient',
+        'Could cost more over time than avalanche'
+      ],
+      bestFor: 'People who need motivation and psychological wins to stay on track'
     }
   ];
 
@@ -63,100 +139,161 @@ export default function StrategyCards() {
   const totalDebt = debts.reduce((sum, debt) => sum + debt.balance, 0);
 
   return (
-    <div className="space-y-lg">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+    <div className="space-y-8">
+      {/* Strategy Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {strategies.map((strategy) => {
-          const isSelected = selectedStrategy === strategy.id;
-          
           return (
             <div 
               key={strategy.id} 
-              className={`border-2 rounded-lg overflow-hidden transition-all ${
-                isSelected 
-                  ? `border-${strategy.bgColor.replace('bg-', '')} shadow-lg transform scale-102` 
-                  : 'border-light-gray-blue'
-              }`}
+              className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full"
             >
-              <div className={`${strategy.bgColor} py-md px-lg relative`}>
-                  <h3 className="text-h4 text-white font-bold">{strategy.title}</h3>
-                {isSelected && (
-                  <div className="absolute top-0 right-0 -mt-1 -mr-1 bg-white rounded-full p-1 shadow-md">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-bright-green" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                )}
-                </div>
+              {/* Strategy Header - Fixed Height */}
+              <div className={`${strategy.bgColor} px-6 py-4 flex flex-col justify-center`} style={{ minHeight: '80px' }}>
+                <h3 className="text-xl font-bold text-white leading-tight text-center">
+                  {strategy.title}
+                </h3>
+              </div>
                 
-                <div className="p-lg">
-                  <p className="text-small text-navy-blue mb-md">{strategy.subtitle}</p>
+              <div className="p-6 flex flex-col flex-grow">
+                {/* Subtitle - Fixed Height */}
+                <div style={{ minHeight: '48px' }} className="flex items-center justify-center mb-6">
+                  <p className="text-sm text-gray-600 leading-relaxed text-center">{strategy.subtitle}</p>
+                </div>
                   
-                  {strategy.results ? (
-                    <>
-                      <p className="text-h3 text-navy-blue font-bold mb-sm">
+                {strategy.results ? (
+                  <>
+                    {/* Key Metrics - Fixed Height */}
+                    <div className="text-center mb-6" style={{ minHeight: '120px' }}>
+                      <div className="text-3xl font-bold text-navy-blue mb-2">
                         {formatCurrency(strategy.results.totalPaid)}
-                      </p>
-                      
-                      <div className="mb-md">
-                        <p className="text-small text-navy-blue">over the course of...</p>
-                        <p className="text-h3 font-bold text-navy-blue inline">{strategy.results.months}</p>
-                        <span className="text-regular text-navy-blue ml-xs">months</span>
                       </div>
-                    
-                    {/* Principal vs Interest Breakdown */}
-                    <div className="mb-md bg-soft-blue rounded-md p-sm">
-                      <h4 className="text-small font-bold text-navy-blue mb-xs">Payment Breakdown</h4>
-                      <div className="space-y-xs">
-                        <div className="flex justify-between text-small">
-                          <span className="text-navy-blue">Principal:</span>
-                          <span className="font-medium text-bright-blue">{formatCurrency(totalDebt)}</span>
+                      <div className="text-sm text-gray-600 mb-4">total cost</div>
+                      
+                      <div className="flex items-center justify-center space-x-4 text-sm">
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-navy-blue">{strategy.results.months}</div>
+                          <div className="text-gray-600">months</div>
                         </div>
-                        <div className="flex justify-between text-small">
-                          <span className="text-navy-blue">Interest:</span>
-                          <span className="font-medium text-orange">{formatCurrency(strategy.results.totalInterest)}</span>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-orange">{formatCurrency(strategy.results.totalInterest)}</div>
+                          <div className="text-gray-600">interest</div>
                         </div>
-                        <div className="border-t border-light-gray-blue pt-xs">
-                          <div className="flex justify-between text-small font-bold">
-                            <span className="text-navy-blue">Total:</span>
-                            <span className="text-navy-blue">{formatCurrency(strategy.results.totalPaid)}</span>
+                      </div>
+                    </div>
+                      
+                    {/* Educational Content - Collapsible - Flexible Height */}
+                    <div className="space-y-3 mb-6 flex-grow">
+                      <CollapsibleInfo 
+                        title="How It Works" 
+                        icon="⚙️"
+                        defaultExpanded={false}
+                      >
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          {strategy.howItWorks}
+                        </p>
+                      </CollapsibleInfo>
+                      
+                      <CollapsibleInfo 
+                        title="Pros & Cons" 
+                        icon="⚖️"
+                        defaultExpanded={false}
+                      >
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-sm font-bold text-bright-green uppercase mb-2 flex items-center">
+                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                              </svg>
+                              Pros
+                            </h4>
+                            <ul className="space-y-1">
+                              {strategy.pros.map((pro, index) => (
+                                <li key={index} className="flex items-start text-sm">
+                                  <span className="text-bright-green mr-2 mt-0.5">✓</span>
+                                  <span className="text-gray-700">{pro}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          
+                          <div>
+                            <h4 className="text-sm font-bold text-orange uppercase mb-2 flex items-center">
+                              <svg className="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm4.707-7.293a1 1 0 00-1.414-1.414L11 11.586l-2.293-2.293a1 1 0 00-1.414 1.414L9.586 13l-2.293 2.293a1 1 0 101.414 1.414L11 14.414l2.293 2.293a1 1 0 001.414-1.414L12.414 13l2.293-2.293z" clipRule="evenodd" />
+                              </svg>
+                              Cons
+                            </h4>
+                            <ul className="space-y-1">
+                              {strategy.cons.map((con, index) => (
+                                <li key={index} className="flex items-start text-sm">
+                                  <span className="text-orange mr-2 mt-0.5">✗</span>
+                                  <span className="text-gray-700">{con}</span>
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         </div>
-                      </div>
+                      </CollapsibleInfo>
+                      
+                      <CollapsibleInfo 
+                        title="Best For" 
+                        icon="🎯"
+                        defaultExpanded={false}
+                      >
+                        <div className="bg-soft-blue-tint rounded-md p-3">
+                          <p className="text-sm text-navy-blue font-medium">
+                            {strategy.bestFor}
+                          </p>
+                        </div>
+                      </CollapsibleInfo>
                     </div>
                       
-                      <hr className="border-light-gray-blue my-md" />
-                      
-                      <p className="text-small text-navy-blue mb-lg">{strategy.description}</p>
-                      
+                    {/* Action Button - Fixed Height and Position */}
+                    <div className="mt-auto">
                       <button
                         onClick={() => handleSelectStrategy(strategy.id)}
-                      className={`text-white font-bold py-sm px-md rounded-full flex items-center justify-center space-x-xs w-full ${strategy.buttonColor} hover:opacity-90 transition-opacity ${isSelected ? 'opacity-80' : ''}`}
+                        className={`w-full text-white font-bold rounded-md transition-all hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 ${strategy.buttonColor} focus:ring-opacity-50`}
+                        style={{ height: '48px' }}
                         disabled={!strategy.results}
+                        aria-label={`View detailed payment plan for ${strategy.title} strategy`}
                       >
-                      <span>{isSelected ? 'Selected' : `Select ${strategy.title}`}</span>
-                      {!isSelected && (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      )}
+                        <span className="flex items-center justify-center space-x-2">
+                          <span>View Payment Plan</span>
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                        </span>
                       </button>
-                    </>
-                  ) : (
-                    <div className="text-center py-lg">
-                      <p className="text-navy-blue">No results available.</p>
                     </div>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  <div className="text-center py-12 flex-grow flex items-center justify-center">
+                    <div className="text-center">
+                      <svg className="h-8 w-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-sm text-gray-600">Calculating results...</p>
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
           );
         })}
       </div>
       
       {/* Interest Comparison Summary */}
       {state.results && (
-        <div className="bg-white p-lg rounded-lg shadow-md">
-          <h3 className="text-regular font-bold text-navy-blue mb-md">Interest Savings Comparison</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-xl font-bold text-navy-blue mb-4 text-center">
+            Interest Savings Comparison
+          </h3>
+          <p className="text-sm text-gray-600 text-center mb-6 max-w-2xl mx-auto">
+            See how much you could save in interest costs by choosing an accelerated repayment strategy.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {strategies.map((strategy) => {
               if (!strategy.results) return null;
               
@@ -166,35 +303,33 @@ export default function StrategyCards() {
               const savingsPercent = minInterest > 0 ? ((savings / minInterest) * 100) : 0;
               
               return (
-                <div key={strategy.id} className="text-center p-md border border-light-gray-blue rounded-md">
-                  <h4 className="text-small font-bold text-navy-blue mb-sm">{strategy.title}</h4>
-                  <p className="text-h4 font-bold text-orange mb-xs">
+                <div 
+                  key={strategy.id} 
+                  className="text-center p-4 border border-gray-200 rounded-md hover:border-bright-blue transition-colors"
+                >
+                  <h4 className="text-sm font-bold text-navy-blue uppercase mb-3 tracking-wide">
+                    {strategy.title}
+                  </h4>
+                  <div className="text-2xl font-bold text-orange mb-1">
                     {formatCurrency(currentInterest)}
-                  </p>
-                  <p className="text-xs text-navy-blue">total interest</p>
+                  </div>
+                  <div className="text-sm text-gray-600 mb-3">total interest</div>
                   
                   {strategy.id !== 'minimum' && (
-                    <div className="mt-sm pt-sm border-t border-light-gray-blue">
-                      <p className="text-small font-bold text-bright-green">
+                    <div className="pt-3 border-t border-gray-200">
+                      <div className="text-lg font-bold text-bright-green mb-1">
                         {savings > 0 ? `Save ${formatCurrency(savings)}` : 'No savings'}
-                      </p>
+                      </div>
                       {savings > 0 && (
-                        <p className="text-xs text-navy-blue">
+                        <div className="text-sm text-gray-600">
                           ({savingsPercent.toFixed(1)}% less interest)
-                        </p>
+                        </div>
                       )}
                     </div>
-        )}
-      </div>
+                  )}
+                </div>
               );
             })}
-          </div>
-          
-          <div className="mt-md p-md bg-soft-yellow rounded-md flex items-center justify-center">
-            <p className="text-small text-navy-blue text-center">
-              <strong>💡 Tip:</strong> The Avalanche method typically saves the most money in interest, 
-              while the Snowball method provides psychological wins with faster debt elimination.
-            </p>
           </div>
         </div>
       )}

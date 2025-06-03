@@ -69,13 +69,13 @@ const processDebtPayment = (debt, extraPayment, totals) => {
     debt.balance += interestCharged;
     totals.totalInterest += interestCharged;
     
-    // Step 2: Use the original minimum payment to maintain consistency
-    // This ensures that monthly payment totals remain constant
-    const originalMinPayment = debt.originalMinPayment || debt.minPayment;
-    
-    // For credit cards, use the original minimum payment to maintain payment consistency
-    // Only fall back to calculated minimum if the original would exceed the balance
-    minPayment = Math.min(originalMinPayment, debt.balance);
+    // Step 2: Calculate dynamic minimum payment based on current balance
+    // Credit card minimum = 1% of balance + monthly interest, or $25 minimum
+    const monthlyInterest = calculateMonthlyInterest(debt);
+    const percentageOfBalance = debt.balance * 0.01;
+    const calculatedMinimum = percentageOfBalance + monthlyInterest;
+    const fixedMinimum = debt.balance < 25 ? debt.balance : 25;
+    minPayment = Math.min(Math.max(calculatedMinimum, fixedMinimum), debt.balance);
     
     // Step 3: Calculate total payment (minimum + extra) and apply at once
     const totalPayment = Math.min(minPayment + extraPayment, debt.balance);
@@ -191,7 +191,7 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
   // Create a deep copy of debts to avoid mutating the original
   let workingDebts = JSON.parse(JSON.stringify(debts));
   
-  // Preserve original minimum payments for consistent rollover calculations
+  // Preserve original minimum payments and calculate fixed budget
   workingDebts.forEach(debt => {
     debt.originalMinPayment = debt.minPayment;
   });
@@ -233,7 +233,7 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
       remainingBudget -= paymentInfo.payment;
     }
     
-    // Step 2: Apply remaining budget to highest APR debt
+    // Step 2: Apply remaining budget (including savings from reduced credit card minimums) to highest APR debt
     while (remainingBudget > 0.01) {
       // Sort remaining debts by APR (highest first) for extra payment
       const debtsByAPR = [...workingDebts]
@@ -265,7 +265,7 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
         workingDebts[priorityDebt.index].balance = 0;
         monthPaymentBreakdown[priorityDebt.index].balance = 0;
         
-        debugLog(`Month ${months}: PAID OFF ${priorityDebt.name}! Remaining budget will be redistributed to other debts.`);
+        debugLog(`Month ${months}: PAID OFF ${priorityDebt.name}! Remaining budget will be redistributed.`);
       }
       
       debugLog(`Month ${months}: After payment`, { 
@@ -309,7 +309,7 @@ export const calculateSnowball = (debts, extraPayment = 0) => {
   // Create a deep copy of debts to avoid mutating the original
   let workingDebts = JSON.parse(JSON.stringify(debts));
   
-  // Preserve original minimum payments for consistent rollover calculations
+  // Preserve original minimum payments and calculate fixed budget
   workingDebts.forEach(debt => {
     debt.originalMinPayment = debt.minPayment;
   });
@@ -353,7 +353,7 @@ export const calculateSnowball = (debts, extraPayment = 0) => {
       remainingBudget -= paymentInfo.payment;
     }
     
-    // STEP 2: Apply remaining budget to lowest balance debt
+    // STEP 2: Apply remaining budget (including savings from reduced credit card minimums) to lowest balance debt
     while (remainingBudget > 0.01) {
       // Sort remaining debts by balance (lowest first) for snowball method
       const debtsWithBalance = [...workingDebts]
@@ -385,7 +385,7 @@ export const calculateSnowball = (debts, extraPayment = 0) => {
         workingDebts[priorityDebt.index].balance = 0;
         monthPaymentBreakdown[priorityDebt.index].balance = 0;
         
-        debugLog(`Month ${months}: PAID OFF ${priorityDebt.name}! Remaining budget will be redistributed to other debts.`);
+        debugLog(`Month ${months}: PAID OFF ${priorityDebt.name}! Remaining budget will be redistributed.`);
         
         // Continue the loop to immediately apply the remaining budget to next priority debt
       } else {
