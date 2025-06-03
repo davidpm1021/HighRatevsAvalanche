@@ -196,14 +196,10 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
   // Create a deep copy of debts to avoid mutating the original
   let workingDebts = JSON.parse(JSON.stringify(debts));
   
-  // Preserve original minimum payments and calculate fixed budget
+  // Preserve original minimum payments
   workingDebts.forEach(debt => {
     debt.originalMinPayment = debt.minPayment;
   });
-  
-  // Calculate fixed monthly budget that will remain consistent
-  const totalOriginalMinPayments = workingDebts.reduce((sum, debt) => sum + debt.originalMinPayment, 0);
-  const fixedMonthlyBudget = totalOriginalMinPayments + extraPayment;
   
   let totals = {
     totalPaid: 0,
@@ -213,75 +209,77 @@ export const calculateAvalanche = (debts, extraPayment = 0) => {
   let monthlyPayments = [];
   
   // Continue until all debts are paid off
-  while (workingDebts.some(debt => debt.balance > 0) && months < 1200) { // max 100 years of payments
+  while (workingDebts.some(debt => debt.balance > 0) && months < 1200) {
     months++;
     let monthPaymentBreakdown = [];
-    let remainingBudget = fixedMonthlyBudget;
     
-    // Step 1: Process minimum payments for all debts first
+    // Calculate total minimums from paid-off debts that should be redistributed
+    const paidOffMinimums = workingDebts
+      .filter(debt => debt.balance <= 0)
+      .reduce((sum, debt) => sum + debt.originalMinPayment, 0);
+    
+    // Find the highest APR debt that still has a balance
+    const activeDebts = workingDebts.filter(debt => debt.balance > 0);
+    const priorityDebt = activeDebts.length > 0 
+      ? activeDebts.reduce((highest, current) => current.apr > highest.apr ? current : highest)
+      : null;
+    
+    // Process each debt
     for (let i = 0; i < workingDebts.length; i++) {
-      if (workingDebts[i].balance <= 0) {
+      const debt = workingDebts[i];
+      
+      if (debt.balance <= 0) {
+        // Debt is already paid off
         monthPaymentBreakdown.push({
-          debtId: workingDebts[i].id,
+          debtId: debt.id,
           payment: 0,
           minimumPayment: 0,
           extraPayment: 0,
           balance: 0,
           interestCharged: 0,
-          originalMinPayment: workingDebts[i].originalMinPayment
+          originalMinPayment: debt.originalMinPayment
         });
         continue;
       }
       
-      const paymentInfo = processDebtPayment(workingDebts[i], 0, totals);
-      monthPaymentBreakdown.push(paymentInfo);
-      remainingBudget -= paymentInfo.payment;
-    }
-    
-    // Step 2: Apply remaining budget (including savings from reduced credit card minimums) to highest APR debt
-    while (remainingBudget > 0.01) {
-      // Sort remaining debts by APR (highest first) for extra payment
-      const debtsByAPR = [...workingDebts]
-        .map((debt, index) => ({ ...debt, index }))
-        .filter(debt => debt.balance > 0)
-        .sort((a, b) => b.apr - a.apr);
+      // Determine payment amount for this debt
+      let paymentAmount = 0;
       
-      if (debtsByAPR.length === 0) break; // No more debts to pay
-      
-      const priorityDebt = debtsByAPR[0];
-      const extraToApply = Math.min(remainingBudget, priorityDebt.balance);
-      
-      debugLog(`Month ${months}: Applying ${extraToApply} extra to ${priorityDebt.name}`, { 
-        debtBalance: priorityDebt.balance, 
-        remainingBudget 
-      });
-      
-      // Apply extra payment
-      workingDebts[priorityDebt.index].balance -= extraToApply;
-      monthPaymentBreakdown[priorityDebt.index].payment += extraToApply;
-      monthPaymentBreakdown[priorityDebt.index].extraPayment = (monthPaymentBreakdown[priorityDebt.index].extraPayment || 0) + extraToApply;
-      monthPaymentBreakdown[priorityDebt.index].balance = workingDebts[priorityDebt.index].balance;
-      
-      remainingBudget -= extraToApply;
-      totals.totalPaid += extraToApply;
-      
-      // Clean up paid off debt
-      if (workingDebts[priorityDebt.index].balance < 0.01) {
-        workingDebts[priorityDebt.index].balance = 0;
-        monthPaymentBreakdown[priorityDebt.index].balance = 0;
-        
-        debugLog(`Month ${months}: PAID OFF ${priorityDebt.name}! Remaining budget will be redistributed.`);
+      if (debt === priorityDebt) {
+        // Priority debt gets: its minimum + extra payment + minimums from paid-off debts
+        paymentAmount = debt.originalMinPayment + extraPayment + paidOffMinimums;
+      } else {
+        // Other debts get just their minimum payment
+        paymentAmount = debt.originalMinPayment;
       }
       
-      debugLog(`Month ${months}: After payment`, { 
-        debtName: priorityDebt.name, 
-        newBalance: workingDebts[priorityDebt.index].balance, 
-        remainingBudget
+      // Apply the payment using our existing logic
+      const paymentInfo = processDebtPayment(debt, Math.max(0, paymentAmount - debt.originalMinPayment), totals);
+      
+      // Override the payment amount to reflect our intended payment
+      const actualPayment = Math.min(paymentAmount, debt.balance + paymentInfo.interestCharged);
+      const extraApplied = Math.max(0, actualPayment - paymentInfo.minimumPayment);
+      
+      monthPaymentBreakdown.push({
+        debtId: debt.id,
+        payment: actualPayment,
+        minimumPayment: paymentInfo.minimumPayment,
+        extraPayment: extraApplied,
+        balance: paymentInfo.balance,
+        interestCharged: paymentInfo.interestCharged,
+        originalMinPayment: debt.originalMinPayment
       });
-    }
-    
-    if (remainingBudget > 0.01) {
-      debugLog(`Month ${months}: WARNING - ${remainingBudget.toFixed(2)} budget unused!`);
+      
+      // Adjust totals if our payment differs from processDebtPayment calculation
+      const paymentDifference = actualPayment - paymentInfo.payment;
+      if (paymentDifference !== 0) {
+        totals.totalPaid += paymentDifference;
+        debt.balance -= paymentDifference;
+        if (debt.balance < 0.01) {
+          debt.balance = 0;
+          monthPaymentBreakdown[i].balance = 0;
+        }
+      }
     }
     
     monthlyPayments.push({
@@ -319,14 +317,10 @@ export const calculateSnowball = (debts, extraPayment = 0) => {
   // Create a deep copy of debts to avoid mutating the original
   let workingDebts = JSON.parse(JSON.stringify(debts));
   
-  // Preserve original minimum payments and calculate fixed budget
+  // Preserve original minimum payments
   workingDebts.forEach(debt => {
     debt.originalMinPayment = debt.minPayment;
   });
-  
-  // Calculate fixed monthly budget that will remain consistent
-  const totalOriginalMinPayments = workingDebts.reduce((sum, debt) => sum + debt.originalMinPayment, 0);
-  const fixedMonthlyBudget = totalOriginalMinPayments + extraPayment;
   
   let totals = {
     totalPaid: 0,
@@ -336,76 +330,80 @@ export const calculateSnowball = (debts, extraPayment = 0) => {
   let monthlyPayments = [];
   
   // Continue until all debts are paid off
-  while (workingDebts.some(debt => debt.balance > 0) && months < 1200) { // max 100 years of payments
+  while (workingDebts.some(debt => debt.balance > 0) && months < 1200) {
     months++;
     let monthPaymentBreakdown = [];
-    let remainingBudget = fixedMonthlyBudget;
     
-    debugLog(`Month ${months}: Starting with budget`, { remainingBudget, fixedMonthlyBudget });
+    // Calculate total minimums from paid-off debts that should be redistributed
+    const paidOffMinimums = workingDebts
+      .filter(debt => debt.balance <= 0)
+      .reduce((sum, debt) => sum + debt.originalMinPayment, 0);
     
-    // STEP 1: Process minimum payments for all debts
+    // Find the lowest balance debt that still has a balance
+    const activeDebts = workingDebts.filter(debt => debt.balance > 0);
+    const priorityDebt = activeDebts.length > 0 
+      ? activeDebts.reduce((lowest, current) => 
+          current.balance < lowest.balance || (current.balance === lowest.balance && current.apr > lowest.apr)
+            ? current : lowest
+        )
+      : null;
+    
+    // Process each debt
     for (let i = 0; i < workingDebts.length; i++) {
-      if (workingDebts[i].balance <= 0) {
+      const debt = workingDebts[i];
+      
+      if (debt.balance <= 0) {
+        // Debt is already paid off
         monthPaymentBreakdown.push({
-          debtId: workingDebts[i].id,
+          debtId: debt.id,
           payment: 0,
           minimumPayment: 0,
           extraPayment: 0,
           balance: 0,
           interestCharged: 0,
-          originalMinPayment: workingDebts[i].originalMinPayment
+          originalMinPayment: debt.originalMinPayment
         });
         continue;
       }
       
-      const paymentInfo = processDebtPayment(workingDebts[i], 0, totals);
-      monthPaymentBreakdown.push(paymentInfo);
-      remainingBudget -= paymentInfo.payment;
-    }
-    
-    // STEP 2: Apply remaining budget (including savings from reduced credit card minimums) to lowest balance debt
-    while (remainingBudget > 0.01) {
-      // Sort remaining debts by balance (lowest first) for snowball method
-      const debtsWithBalance = [...workingDebts]
-        .map((debt, index) => ({ ...debt, index }))
-        .filter(debt => debt.balance > 0)
-        .sort((a, b) => a.balance === b.balance ? b.apr - a.apr : a.balance - b.balance);
+      // Determine payment amount for this debt
+      let paymentAmount = 0;
       
-      if (debtsWithBalance.length === 0) break; // No more debts to pay
+      if (debt === priorityDebt) {
+        // Priority debt gets: its minimum + extra payment + minimums from paid-off debts
+        paymentAmount = debt.originalMinPayment + extraPayment + paidOffMinimums;
+      } else {
+        // Other debts get just their minimum payment
+        paymentAmount = debt.originalMinPayment;
+      }
       
-      const priorityDebt = debtsWithBalance[0];
-      const extraToApply = Math.min(remainingBudget, priorityDebt.balance);
+      // Apply the payment using our existing logic
+      const paymentInfo = processDebtPayment(debt, Math.max(0, paymentAmount - debt.originalMinPayment), totals);
       
-      debugLog(`Month ${months}: Applying ${extraToApply} extra to ${priorityDebt.name}`, { 
-        debtBalance: priorityDebt.balance, 
-        remainingBudget 
+      // Override the payment amount to reflect our intended payment
+      const actualPayment = Math.min(paymentAmount, debt.balance + paymentInfo.interestCharged);
+      const extraApplied = Math.max(0, actualPayment - paymentInfo.minimumPayment);
+      
+      monthPaymentBreakdown.push({
+        debtId: debt.id,
+        payment: actualPayment,
+        minimumPayment: paymentInfo.minimumPayment,
+        extraPayment: extraApplied,
+        balance: paymentInfo.balance,
+        interestCharged: paymentInfo.interestCharged,
+        originalMinPayment: debt.originalMinPayment
       });
       
-      // Apply the extra payment
-      workingDebts[priorityDebt.index].balance -= extraToApply;
-      monthPaymentBreakdown[priorityDebt.index].payment += extraToApply;
-      monthPaymentBreakdown[priorityDebt.index].extraPayment = (monthPaymentBreakdown[priorityDebt.index].extraPayment || 0) + extraToApply;
-      monthPaymentBreakdown[priorityDebt.index].balance = workingDebts[priorityDebt.index].balance;
-      
-      remainingBudget -= extraToApply;
-      totals.totalPaid += extraToApply;
-      
-      // Clean up paid off debt
-      if (workingDebts[priorityDebt.index].balance < 0.01) {
-        workingDebts[priorityDebt.index].balance = 0;
-        monthPaymentBreakdown[priorityDebt.index].balance = 0;
-        
-        debugLog(`Month ${months}: PAID OFF ${priorityDebt.name}! Remaining budget will be redistributed.`);
-        
-        // Continue the loop to immediately apply the remaining budget to next priority debt
-      } else {
-        // Debt not fully paid off, continue with remaining budget if any
-        debugLog(`Month ${months}: Applied ${extraToApply} to ${priorityDebt.name}, new balance: ${workingDebts[priorityDebt.index].balance}, remaining budget: ${remainingBudget}`);
+      // Adjust totals if our payment differs from processDebtPayment calculation
+      const paymentDifference = actualPayment - paymentInfo.payment;
+      if (paymentDifference !== 0) {
+        totals.totalPaid += paymentDifference;
+        debt.balance -= paymentDifference;
+        if (debt.balance < 0.01) {
+          debt.balance = 0;
+          monthPaymentBreakdown[i].balance = 0;
+        }
       }
-    }
-    
-    if (remainingBudget > 0.01) {
-      debugLog(`Month ${months}: WARNING - ${remainingBudget.toFixed(2)} budget unused!`);
     }
     
     monthlyPayments.push({
